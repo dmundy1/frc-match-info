@@ -1,6 +1,6 @@
 // placeholder stuff, to be updated by api
 let currentEvent = "..."
-let alliance = "red"
+let alliance = "..." // a good starting value would be null, but that looks bad
 let currentMatch = 0
 let nextMatch = 0
 let nextMatchTime = "..."
@@ -12,71 +12,12 @@ let blueAllianceTeams = ["...", "...", "..."];
 // to be used for api
 const AUTH_KEY = "hqrPvAx8EiC4XDwgFPREFKEwwzsg3k6RPUudptM5SSh3Pz1ynKh3duhVaaZ1Xgvw"
 const TEAM_NUMBER = "frc6911";
-let EVENT_CODE = ""
+const MINS_TO_QUEUE = 20;
+let EVENT_CODE = "" // temporary value of event code, hopefully updated by api
 
 function updateApi() {
 
-    /*
-
-
-    def get_events():
-        url = f"https://www.thebluealliance.com/api/v3/team/{TEAM}/events/{YEAR}/simple"
-        headers = {"X-TBA-Auth-Key": AUTH_KEY}
-        response = requests.get(url, headers=headers)
-        return response.json()
-
-    def get_match_info(event):
-        url = f"https://www.thebluealliance.com/api/v3/team/{TEAM}/event/{event}/matches"
-        headers = {"X-TBA-Auth-Key": AUTH_KEY}
-        response = requests.get(url, headers=headers)
-
-        print(url)
-        
-        return response.json()
-
-    def find_closest_event(events):
-        today = datetime.today().date()
-        closest_event = None
-        min_days_diff = float("inf")
-
-        for event in events:
-            end_date = datetime.strptime(event["end_date"], "%Y-%m-%d").date()
-            days_diff = abs((end_date - today).days)
-
-            if days_diff < min_days_diff:
-                min_days_diff = days_diff
-                closest_event = event
-
-        print(closest_event)
-
-        return closest_event
-
-    def get_team_info(team):
-        url = f"https://www.thebluealliance.com/api/v3/team/frc{team}"
-        headers = {"X-TBA-Auth-Key": AUTH_KEY}
-        response = requests.get(url, headers=headers)
-        return response.json()
-
-    def get_team_status(team):
-        url = f"https://www.thebluealliance.com/api/v3/team/frc{team}/event/{EVENT_CODE}/status"
-        headers = {"X-TBA-Auth-Key": AUTH_KEY}
-        response = requests.get(url, headers=headers)
-
-        return response.json()
-
-    def parse_rank(ranking_str):
-        rank = int(re.search(r"Rank (\d+)", ranking_str).group(1))
-        score = re.search(r"(\d+-\d+-\d+)", ranking_str).group(0)
-        return rank, score
-
-    def print_team_ranking(team, color):
-        status = get_team_status(team)
-        ranking_str = status["overall_status_str"]
-
-        rank, score = parse_rank(ranking_str)
-
-        cprint(f"{team}: Rank {rank}, {score}", color, attrs=['bold'] if rank <= 8 else [])
-    */
+    console.log("updating api")
 
     // get the closest event
     fetch("https://www.thebluealliance.com/api/v3/team/" + TEAM_NUMBER + "/events/2023/simple", {
@@ -87,8 +28,6 @@ function updateApi() {
     })
     .then(response => response.blob())
     .then(blob => {
-        console.log(blob)
-
         const reader = new FileReader();
         reader.onload = () => {
             const data = JSON.parse(reader.result);
@@ -99,10 +38,11 @@ function updateApi() {
             
             for (const event of data) {
                 const startDate = new Date(event.start_date);
-                const endDate = new Date(event.end_date);
+                const endDate = new Date(event.end_date + "T23:59:59"); // 1 day of leeway, needed to not error out
                 const daysDiffStart = Math.abs((startDate - today) / (1000 * 60 * 60 * 24));
                 const daysDiffEnd = Math.abs((endDate - today) / (1000 * 60 * 60 * 24));
             
+                // i honestly have no idea how this works, but it does
                 if (daysDiffStart < minDaysDiff && startDate <= today && endDate >= today) {
                     minDaysDiff = daysDiffStart;
                     currentEventJson = event;
@@ -113,9 +53,16 @@ function updateApi() {
                 }
             }
 
+            if (currentEventJson == null) {
+                console.error("currentEventJson was null")
+                alert("!! Error !! No events found");
+                return;
+            }
+
             currentEvent = currentEventJson.name;
-            console.log(currentEventJson)
             EVENT_CODE = currentEventJson.key;
+
+            console.log("found current event: " + currentEvent)
 
             updateCurrentMatch()
         }
@@ -140,6 +87,7 @@ function updateApi() {
                 for (let i = 0; i < data.length; i++) {
                     if (data[i].actual_time != null) {
                         currentMatch = data[i].match_number + 1;
+                        console.log("updated current match: " + currentMatch)
                         break;
                     }
                 }
@@ -150,7 +98,7 @@ function updateApi() {
         });
 
         async function getTeamRanking(teamNumber) {
-            console.log("getting team ranking for " + teamNumber)
+            console.log("getting team ranking for team " + teamNumber)
 
             const response = await fetch("https://www.thebluealliance.com/api/v3/team/frc" + teamNumber + "/event/" + EVENT_CODE + "/status", {
                 mode: 'cors',
@@ -163,8 +111,7 @@ function updateApi() {
             return rank;
         }
 
-        function getCurrentMatchInfo()
-        {
+        function getCurrentMatchInfo() {
             fetch("https://www.thebluealliance.com/api/v3/team/" +
             TEAM_NUMBER + "/event/" + EVENT_CODE + "/matches", {
                 mode: 'cors',
@@ -192,17 +139,33 @@ function updateApi() {
                                 if (closestMatchTimeDifference === null || matchTimeDifference < closestMatchTimeDifference) {
                                     closestMatch = data[i];
                                     closestMatchTimeDifference = matchTimeDifference;
+
+                                    if (closestMatchTimeDifference < 0) {
+                                        console.error("closest match time difference is negative");
+                                        alert("!! Error !! closest match time difference is negative");
+                                        return;
+                                    }
+
+                                    if (closestMatch == null) {
+                                        console.error("closest match is null");
+                                        alert("!! Error !! closest match is null");
+                                        return;
+                                    }
                                 }
                             }
                         }
 
                         (async function updateMatchAllianceInfo() {
-
                             if (closestMatch) {
+                                console.log("updating match info")
+
                                 nextMatch = closestMatch.match_number;
                                 nextMatchTime = new Date(closestMatch.predicted_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                                // 20 mins before match
-                                queueTimeUnix = closestMatch.predicted_time - 1200;
+                                queueTimeUnix = closestMatch.predicted_time - (60 * MINS_TO_QUEUE);
+
+                                console.log("next match: " + nextMatch)
+                                console.log("next match time: " + nextMatchTime)
+                                console.log("queue time: " + queueTimeUnix)
 
                                 let tempRedAllianceTeams = [];
                                 let tempBlueAllianceTeams = [];
@@ -229,8 +192,9 @@ function updateApi() {
                                         number: tempBlueAllianceTeams[i],
                                         rank: await getTeamRanking(tempBlueAllianceTeams[i])
                                     };
-                                    console.log(tempBlueAllianceTeams[i]);
                                 }
+
+                                console.log("all done")
                                 
                                 redAllianceTeams = tempRedAllianceTeams;
                                 blueAllianceTeams = tempBlueAllianceTeams;
@@ -248,19 +212,33 @@ function updateApi() {
     }
 }   
 
+let tempTime = null;
+
 function updatePage() {
     const currentTimeElement = document.querySelector('.current-time');
     const currentTime = new Date();
     const formattedTime = currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     currentTimeElement.textContent = formattedTime;
 
-    // queue time calculation (todo: make this better)
+    // there is probably a library for this, 
+    // or a better way to do this, but we're 
+    // looking to be importless
+
+    queueTime = ""; // because of the +=, need to reset this every time or it will keep adding to the old value
+
     if (queueTimeUnix > currentTime.getTime() / 1000) {
         let timeUntilQueue = queueTimeUnix - (currentTime.getTime() / 1000);
-        let minutes = Math.floor(timeUntilQueue / 60);
-        let seconds = Math.floor(timeUntilQueue % 60);
-        seconds = seconds < 10 ? "0" + seconds : seconds;
-        queueTime = minutes + ":" + seconds;
+        let date = new Date(timeUntilQueue * 1000);
+        
+        let hours = date.getUTCHours();
+        let minutes = date.getUTCMinutes();
+        let seconds = date.getUTCSeconds();
+                
+        if (hours > 0) {
+          queueTime += hours.toString().padStart(2, "0") + ":";
+        }
+        
+        queueTime += minutes.toString().padStart(2, "0") + ":" + seconds.toString().padStart(2, "0");        
     } else {
         queueTime = "00:00";
     }
@@ -283,10 +261,12 @@ function updatePage() {
     timeUntilElement.innerHTML = queueTime + "<span>until<br>queue</span>";
 
     // update alliance title
-    const allianceTitleElement = document.querySelector('.alliance-title');
-    const redAlliance = alliance === 'red';
-    allianceTitleElement.textContent = redAlliance ? 'Red Alliance' : 'Blue Alliance';
-    allianceTitleElement.style.color = redAlliance ? 'red' : 'blue';
+    if (alliance != "...") {
+        const allianceTitleElement = document.querySelector('.alliance-title');
+        const redAlliance = alliance === 'red';
+        allianceTitleElement.textContent = redAlliance ? 'Red Alliance' : 'Blue Alliance';
+        allianceTitleElement.style.color = redAlliance ? 'red' : 'blue';
+    }
   
     // update alliance teams
     const allianceElement = document.querySelector('.alliance');
